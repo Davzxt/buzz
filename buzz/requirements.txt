@@ -1,0 +1,6 @@
+fastapi==0.115.*
+uvicorn==0.32.*
+scikit-learn
+joblib
+numpy
+psutil
