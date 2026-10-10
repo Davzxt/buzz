@@ -1,0 +1,23 @@
+{
+  "labels": [
+    "chat",
+    "math",
+    "remember",
+    "recall",
+    "summarize",
+    "factual"
+  ],
+  "train_seconds": 0.56,
+  "n_train": 2400,
+  "n_val": 600,
+  "peak_rss_mb": 108.1,
+  "test_unseen_templates": {
+    "acc": 0.8366666666666667,
+    "ece": 0.14069758349986589,
+    "temp": 0.2,
+    "acc_conf>=0.6": 0.8703703703703703,
+    "coverage@0.6": 0.96,
+    "n_test": 900
+  },
+  "note": "dados sintéticos; templates de teste disjuntos dos de treino/validação"
+}
