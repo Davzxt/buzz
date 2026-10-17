@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel de pesquisa — memória de protótipos</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1b1f24; --muted: #5b6573;
+    --border: #d9dee5; --accent: #2b6cb0; --ok: #2f855a; --bad: #c53030; --warn: #b7791f;
+    --bar: #2b6cb0; --bar-alt: #a0aec0; --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1419; --panel: #171e26; --text: #e6ebf1; --muted: #9aa6b4;
+      --border: #2a3441; --accent: #63b3ed; --ok: #68d391; --bad: #fc8181; --warn: #f6ad55;
+      --bar: #63b3ed; --bar-alt: #4a5568;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1419; --panel: #171e26; --text: #e6ebf1; --muted: #9aa6b4;
+    --border: #2a3441; --accent: #63b3ed; --ok: #68d391; --bad: #fc8181; --warn: #f6ad55;
+    --bar: #63b3ed; --bar-alt: #4a5568;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 var(--font); }
+  header { padding: 20px 16px 8px; max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  h2 { font-size: 1.1rem; margin: 0 0 12px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 0 16px 40px; display: grid; gap: 16px; }
+  .lead { color: var(--muted); margin: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; overflow-x: auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .card .k { color: var(--muted); font-size: .85rem; }
+  .card .v { font-size: 1.4rem; font-weight: 600; }
+  table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: .92rem; }
+  td, th { min-width: 7ch; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .8rem; font-weight: 600; border: 1px solid currentColor; }
+  .s-ok { color: var(--ok); } .s-bad { color: var(--bad); } .s-warn { color: var(--warn); }
+  code, .mono { font-family: var(--mono); font-size: .88rem; }
+  .muted { color: var(--muted); }
+  svg text { fill: var(--text); font-size: 12px; }
+  svg .axis { stroke: var(--border); }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: .85rem; color: var(--muted); margin-top: 6px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+  .grid-2 { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  @media (min-width: 860px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
+  .note { border-left: 3px solid var(--warn); padding: 8px 12px; background: var(--bg); border-radius: 6px; }
+  #status { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Memória de protótipos esparsa — painel de pesquisa</h1>
+  <p class="lead">Hipótese H1: codificador esparso fixo + memória aditiva por classe, sem gradiente. Leitura apenas: os valores vêm de <code>results/summary.js</code>, gerado por <code>experiments/run_experiments.py</code>.</p>
+  <p id="status" class="mono">carregando resultados…</p>
+</header>
+<main id="app"></main>
+
+<script src="../results/summary.js"></script>
+<script>
+(function () {
+  "use strict";
+  var app = document.getElementById("app");
+  var status = document.getElementById("status");
+
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      if (k === "class") node.className = attrs[k]; else node.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function (c) {
+      node.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+    });
+    return node;
+  }
+  function panel(title, children) {
+    return el("section", { class: "panel" }, [el("h2", null, [title])].concat(children));
+  }
+  function fmt(x, d) { return (x === null || x === undefined || isNaN(x)) ? "—" : Number(x).toFixed(d === undefined ? 3 : d); }
+  function statusClass(s) {
+    if (s === "SUSTENTADO") return "s-ok";
+    if (s === "NÃO SUSTENTADO") return "s-bad";
+    return "s-warn";
+  }
+  function table(headers, rows, numericCols) {
+    var thead = el("thead", null, [el("tr", null, headers.map(function (h, i) {
+      return el("th", numericCols && numericCols.indexOf(i) >= 0 ? { class: "num" } : null, [h]);
+    }))]);
+    var tbody = el("tbody", null, rows.map(function (r) {
+      return el("tr", null, r.map(function (cell, i) {
+        var attrs = numericCols && numericCols.indexOf(i) >= 0 ? { class: "num" } : null;
+        if (cell instanceof Node) return el("td", attrs, [cell]);
+        return el("td", attrs, [String(cell)]);
+      }));
+    }));
+    return el("table", null, [thead, tbody]);
+  }
+
+  function barChart(items) {
+    // items: [{label, mean, std, color}], values in [0, 1]
+    var W = 520, H = 220, pad = { l: 40, r: 10, t: 10, b: 60 };
+    var svgNS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "Acurácia final por método, média e desvio entre seeds");
+    svg.setAttribute("width", "100%");
+    var innerW = W - pad.l - pad.r, innerH = H - pad.t - pad.b;
+    var band = innerW / items.length;
+    function y(v) { return pad.t + innerH * (1 - v); }
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (g) {
+      var line = document.createElementNS(svgNS, "line");
+      line.setAttribute("x1", pad.l); line.setAttribute("x2", W - pad.r);
+      line.setAttribute("y1", y(g)); line.setAttribute("y2", y(g));
+      line.setAttribute("class", "axis");
+      svg.appendChild(line);
+      var t = document.createElementNS(svgNS, "text");
+      t.setAttribute("x", pad.l - 6); t.setAttribute("y", y(g) + 4); t.setAttribute("text-anchor", "end");
+      t.textContent = g.toFixed(2);
+      svg.appendChild(t);
+    });
+    items.forEach(function (it, i) {
+      var x = pad.l + band * i + band * 0.2, w = band * 0.6;
+      var top = y(it.mean), h = y(0) - top;
+      var rect = document.createElementNS(svgNS, "rect");
+      rect.setAttribute("x", x); rect.setAttribute("y", top); rect.setAttribute("width", w); rect.setAttribute("height", Math.max(h, 0));
+      rect.setAttribute("fill", it.color); rect.setAttribute("rx", 3);
+      var title = document.createElementNS(svgNS, "title");
+      title.textContent = it.label + ": " + fmt(it.mean) + " ± " + fmt(it.std);
+      rect.appendChild(title);
+      svg.appendChild(rect);
+      var cx = x + w / 2;
+      var err = document.createElementNS(svgNS, "line");
+      err.setAttribute("x1", cx); err.setAttribute("x2", cx);
+      err.setAttribute("y1", y(Math.min(1, it.mean + it.std))); err.setAttribute("y2", y(Math.max(0, it.mean - it.std)));
+      err.setAttribute("stroke", "currentColor"); err.setAttribute("stroke-width", 1.5);
+      svg.appendChild(err);
+      var lab = document.createElementNS(svgNS, "text");
+      lab.setAttribute("x", cx); lab.setAttribute("y", H - pad.b + 14); lab.setAttribute("text-anchor", "end");
+      lab.setAttribute("transform", "rotate(-35 " + cx + " " + (H - pad.b + 14) + ")");
+      lab.textContent = it.label;
+      svg.appendChild(lab);
+    });
+    return svg;
+  }
+
+  function lineChart(series, ks) {
+    // series: [{name, color, points: [mean per k], spread: [std per k]}]
+    var W = 520, H = 240, pad = { l: 40, r: 10, t: 10, b: 36 };
+    var svgNS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("width", "100%");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "Acurácia em função de k exemplos por classe");
+    var innerW = W - pad.l - pad.r, innerH = H - pad.t - pad.b;
+    function x(i) { return pad.l + (ks.length === 1 ? innerW / 2 : innerW * i / (ks.length - 1)); }
+    function y(v) { return pad.t + innerH * (1 - v); }
+    [0.5, 0.75, 1].forEach(function (g) {
+      var line = document.createElementNS(svgNS, "line");
+      line.setAttribute("x1", pad.l); line.setAttribute("x2", W - pad.r);
+      line.setAttribute("y1", y(g)); line.setAttribute("y2", y(g)); line.setAttribute("class", "axis");
+      svg.appendChild(line);
+      var t = document.createElementNS(svgNS, "text");
+      t.setAttribute("x", pad.l - 6); t.setAttribute("y", y(g) + 4); t.setAttribute("text-anchor", "end");
+      t.textContent = g.toFixed(2);
+      svg.appendChild(t);
+    });
+    ks.forEach(function (k, i) {
+      var t = document.createElementNS(svgNS, "text");
+      t.setAttribute("x", x(i)); t.setAttribute("y", H - 10); t.setAttribute("text-anchor", "middle");
+      t.textContent = "k=" + k;
+      svg.appendChild(t);
+    });
+    series.forEach(function (s) {
+      var pts = s.points.map(function (v, i) { return x(i) + "," + y(v); }).join(" ");
+      var pl = document.createElementNS(svgNS, "polyline");
+      pl.setAttribute("points", pts); pl.setAttribute("fill", "none");
+      pl.setAttribute("stroke", s.color); pl.setAttribute("stroke-width", s.dash ? 1.5 : 2.5);
+      if (s.dash) pl.setAttribute("stroke-dasharray", "5 4");
+      svg.appendChild(pl);
+      s.points.forEach(function (v, i) {
+        var c = document.createElementNS(svgNS, "circle");
+        c.setAttribute("cx", x(i)); c.setAttribute("cy", y(v)); c.setAttribute("r", 3.5);
+        c.setAttribute("fill", s.color);
+        var title = document.createElementNS(svgNS, "title");
+        title.textContent = s.name + " k=" + ks[i] + ": " + fmt(v) + " ± " + fmt(s.spread[i]);
+        c.appendChild(title);
+        svg.appendChild(c);
+      });
+    });
+    return svg;
+  }
+
+  function legend(items) {
+    return el("div", { class: "legend" }, items.map(function (it) {
+      return el("span", null, [el("i", { style: "background:" + it.color }), it.label]);
+    }));
+  }
+
+  function render(R) {
+    if (!R || !R.class_incremental) {
+      status.textContent = "Nenhum resultado encontrado. Rode: python experiments/run_experiments.py";
+      status.className = "s-bad";
+      return;
+    }
+    var ci = R.class_incremental, fs = R.few_shot, vd = R.verdicts, ab = R.ablation, cfg = R.config;
+    var names = {
+      prototype_sparse: "Protótipo esparso (H1)", ncm_raw: "NCM (pixels)", naive_softmax: "Softmax ingênuo",
+      naive_mlp: "MLP ingênuo", replay_mlp: "MLP com replay", joint_mlp_offline: "MLP conjunto (referência)"
+    };
+    var colors = { prototype_sparse: "#2b6cb0", ncm_raw: "#805ad5", naive_softmax: "#a0aec0",
+      naive_mlp: "#718096", replay_mlp: "#dd6b20", joint_mlp_offline: "#38a169" };
+
+    status.textContent = "seeds: " + cfg.seeds.join(", ") + " · tempo total: " + fmt(R.elapsed_s, 1) + " s";
+    status.className = "mono muted";
+
+    var verdictValues = Object.keys(vd).map(function (k) { return vd[k].status; });
+    var counts = { ok: 0, bad: 0, inc: 0 };
+    verdictValues.forEach(function (s) {
+      if (s === "SUSTENTADO") counts.ok++; else if (s === "NÃO SUSTENTADO") counts.bad++; else counts.inc++;
+    });
+
+    app.appendChild(el("section", { class: "cards" }, [
+      card("Hipóteses sustentadas", counts.ok, "s-ok"),
+      card("Não sustentadas", counts.bad, "s-bad"),
+      card("Inconclusivas", counts.inc, "s-warn"),
+      card("Seeds", cfg.seeds.length, ""),
+      card("Ciclo atual", "1 de 2 planejados", "")
+    ]));
+
+    app.appendChild(panel("Critérios pré-registrados e veredito", [
+      table(["Critério", "Veredito", "Evidência"],
+        Object.keys(vd).map(function (k) {
+          return [k, el("span", { class: "badge " + statusClass(vd[k].status) }, [vd[k].status]), vd[k].evidence];
+        }))
+    ]));
+
+    var ciNames = Object.keys(names).filter(function (m) { return ci[m]; });
+    var ciRows = ciNames.map(function (m) {
+      var s = ci[m];
+      var fa = s.final_acc;
+      return [
+        names[m],
+        fmt(fa.mean) + " ± " + fmt(fa.std),
+        s.avg_incremental_acc ? fmt(s.avg_incremental_acc.mean) : "—",
+        s.forgetting ? fmt(s.forgetting.mean) : "—",
+        s.fit_time_s ? fmt(s.fit_time_s.mean, 3) : "—",
+        s.memory_floats ? String(Math.round(s.memory_floats.mean)) : "—"
+      ];
+    });
+    var incBars = ciNames.map(function (m) {
+      return { label: names[m], mean: ci[m].final_acc.mean, std: ci[m].final_acc.std, color: colors[m] };
+    });
+
+    app.appendChild(el("div", { class: "grid-2" }, [
+      panel("Aprendizado incremental de classes", [
+        table(["Método", "Acurácia final", "Acurácia incremental média", "Esquecimento", "Treino (s)", "Memória (floats)"],
+          ciRows, [1, 2, 3, 4, 5]),
+        el("p", { class: "muted" }, ["5 tarefas de 2 classes cada, sobre o conjunto digits. Média ± desvio entre seeds."])
+      ]),
+      panel("Acurácia final por método", [barChart(incBars)])
+    ]));
+
+    var ks = cfg.few_shot_k.map(String);
+    var fsMethods = ["prototype_sparse", "ncm_raw", "nn1_raw", "logreg", "mlp_fewshot"];
+    var fsNames = { prototype_sparse: "Protótipo esparso", ncm_raw: "NCM", nn1_raw: "1-NN", logreg: "Regressão logística", mlp_fewshot: "MLP" };
+    var fsColors = { prototype_sparse: "#2b6cb0", ncm_raw: "#805ad5", nn1_raw: "#dd6b20", logreg: "#38a169", mlp_fewshot: "#718096" };
+    var fsSeries = fsMethods.map(function (m) {
+      return {
+        name: fsNames[m], color: fsColors[m], dash: m !== "prototype_sparse",
+        points: ks.map(function (k) { return fs[k][m].mean; }),
+        spread: ks.map(function (k) { return fs[k][m].std; })
+      };
+    });
+    app.appendChild(el("div", { class: "grid-2" }, [
+      panel("Poucos exemplos (acurácia no teste completo)", [
+        lineChart(fsSeries, cfg.few_shot_k),
+        legend(fsMethods.map(function (m) { return { label: fsNames[m], color: fsColors[m] }; })),
+        table(["k"].concat(fsMethods.map(function (m) { return fsNames[m]; })),
+          ks.map(function (k) { return [k].concat(fsMethods.map(function (m) { return fmt(fs[k][m].mean) + " ± " + fmt(fs[k][m].std, 3); })); }),
+          [1, 2, 3, 4, 5])
+      ]),
+      panel("Ablação (validação interna, sem o conjunto de teste)", [
+        table(["Parâmetro", "Valor", "Acurácia val.", "Memória (floats)"],
+          ab.map(function (r) { return [r.param, String(r.value), fmt(r.val_acc_mean) + " ± " + fmt(r.val_acc_std), String(r.memory_floats)]; }),
+          [1, 2, 3])
+      ])
+    ]));
+
+    app.appendChild(panel("Limitações e como reproduzir", [
+      el("p", { class: "note" }, ["Um único conjunto de dados pequeno (digits). A contagem de memória inclui a matriz de projeção densa. A regra de veredito foi endurecida após a primeira execução: ver docs/hypotheses.md."]),
+      el("p", null, ["Reproduzir: ", el("code", null, ["python experiments/run_experiments.py --config configs/experiment.json"]), " (cerca de 16 s em CPU)."]),
+      el("p", null, ["Documentação: ", el("code", null, ["README.md"]), ", ", el("code", null, ["docs/hypotheses.md"]), ", ", el("code", null, ["docs/architecture.md"]), ", ", el("code", null, ["research/literature.md"]), "."])
+    ]));
+  }
+
+  function card(label, value, cls) {
+    return el("div", { class: "panel card" }, [el("div", { class: "k" }, [label]), el("div", { class: "v " + cls }, [String(value)])]);
+  }
+
+  try {
+    render(window.RESULTS);
+  } catch (err) {
+    status.textContent = "Erro ao renderizar os resultados: " + err.message;
+    status.className = "s-bad";
+    console.error(err);
+  }
+})();
+</script>
+</body>
+</html>

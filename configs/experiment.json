@@ -1,0 +1,16 @@
+{
+  "seeds": [0, 1, 2, 3, 4],
+  "test_size": 0.3,
+  "classes_per_task": 2,
+  "prototype": {"expansion_dim": 2000, "fan_in": 8, "k_active": 64},
+  "hidden": 64,
+  "sgd": {"lr": 0.1, "epochs": 20, "batch_size": 32},
+  "replay_per_class": 20,
+  "joint_mlp": {"hidden_layer_sizes": [64], "max_iter": 1000},
+  "few_shot_k": [1, 5, 10, 20],
+  "ablation": {
+    "expansion_dim": [1000, 2000, 4000],
+    "k_active": [32, 64, 128],
+    "fan_in": [4, 8, 16]
+  }
+}
