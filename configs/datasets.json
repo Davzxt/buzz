@@ -1,0 +1,47 @@
+{
+  "output": "data/mixed_corpus.txt",
+  "sources": [
+    {
+      "name": "conversation",
+      "dataset": "OpenAssistant/oasst1",
+      "config": null,
+      "split": "train",
+      "license": "apache-2.0",
+      "fields": {
+        "text": "text"
+      },
+      "filter": {
+        "lang": "en"
+      },
+      "share": 0.35,
+      "format": "{role}: {text}"
+    },
+    {
+      "name": "education",
+      "dataset": "HuggingFaceTB/cosmopedia",
+      "config": "khanacademy",
+      "split": "train",
+      "license": "apache-2.0",
+      "fields": {
+        "text": "text"
+      },
+      "filter": {},
+      "share": 0.35,
+      "format": "{text}"
+    },
+    {
+      "name": "code",
+      "dataset": "bigcode/the-stack-smol-xs",
+      "hub_file": "data/python/data.json",
+      "license": "per-file (The Stack; verify each file's license before redistributing)",
+      "fields": {
+        "text": "content"
+      },
+      "filter": {},
+      "share": 0.3,
+      "format": "{text}"
+    }
+  ],
+  "chars_total": 3000000,
+  "separator": "\n\n"
+}
